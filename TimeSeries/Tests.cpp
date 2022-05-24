@@ -45,7 +45,7 @@ bool TimeSeriesTests::GetPointsTest()
 	TSD series("tests/monotonic.csv");
 	auto start{ series.Data_.end() };
 
-	for (double t = 1.96; t < 6.0; t += 0.01)
+	for (double t = -1.0; t < 6.0; t += 0.01)
 		auto pr{ series.Data_.GetTimePoints(t, options, start) };
 
 	TimeSeries::TimeSeries<double, double> onepoint({ 1 }, { 1 });
@@ -71,7 +71,8 @@ bool TimeSeriesTests::DenseOutputTest()
 	bool ret{ true };
 	TSD series("tests/monotonic.csv");
 	TSO options;
-	options.SetTimeTolerance(0.05);
+	options.SetTimeTolerance(0.005);
+	options.SetMultiValuePoint(TimeSeries::MultiValuePointProcess::All);
 	auto dense{ series.DenseOutput(-1.0, 6.0, 0.01, options) };
 	dense.Data_.WriteCSV("tests/denseoutput.csv");
 	return ret;

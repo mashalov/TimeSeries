@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <locale>
 #include "fmt/core.h"
 #include "fmt/format.h"
 
@@ -72,15 +73,35 @@ namespace TimeSeries
 		}
 	};
 
+	enum class MultiValuePointProcess
+	{
+		All,
+		Max,
+		Min,
+		Avg
+	};
+
 	template<typename T, typename V>
 	class Options
 	{
 	protected:
 		T TimeTolerance_ = 1E-8;
+		MultiValuePointProcess MultiValuePointProcess_ = MultiValuePointProcess::All;
+		
 	public:
 		inline T TimeTolerance() const { return TimeTolerance_; }
 		void SetTimeTolerance(T TimeTolerance) { TimeTolerance_ = TimeTolerance; }
+		inline MultiValuePointProcess MultiValuePoint() const { return MultiValuePointProcess_; }
+		void SetMultiValuePoint(MultiValuePointProcess MultiValuePoint) { MultiValuePointProcess_ = MultiValuePoint; }
 	};
+
+	template <class charT, charT sep>
+	class comma_facet : public std::numpunct<charT>
+	{
+	protected:
+		charT do_decimal_point() const { return sep; }
+	};
+
 
 
 	template<typename T, typename V>
@@ -139,6 +160,7 @@ namespace TimeSeries
 			std::ofstream csvfile(path);
 			if (csvfile.is_open())
 			{
+				csvfile.imbue(std::locale(csvfile.getloc(), new comma_facet<char, ','>));
 				for (const auto& TimePoint : *this)
 					csvfile << TimePoint.t() << ";" << TimePoint.v() << std::endl;
 			}
@@ -184,7 +206,7 @@ namespace TimeSeries
 
 			// if there are points between bounds - send them to output
 			for (auto it = left; it != right; it++)
-				if (it->t() <= Time)
+				if (it->t() >= tolrange.first && it->t() < tolrange.second)
 					retdata.emplace_back(*it);
 
 			// if no points around time requested - interpolate series
@@ -239,6 +261,7 @@ namespace TimeSeries
 			std::ifstream csvfile(path);
 			if (csvfile.is_open())
 			{
+				csvfile.imbue(std::locale(csvfile.getloc(), new comma_facet<char, ','>));
 				double time{ 0 }, value{ 0 };
 				char semicolon{ ';' };
 				for (;;)
@@ -264,8 +287,39 @@ namespace TimeSeries
 				const T t{ Start + static_cast<T>(ti) * Step };
 				if (t > End)
 					break;
-				for (const auto& TimePoint : Data_.GetTimePoints(t, options, start))
-					dense.Data_.emplace_back(TimePoint);
+
+				double MultiValue{ 0 };
+
+				const auto Points{ Data_.GetTimePoints(t, options, start) };
+				for (auto TimePoint = Points.begin() ; TimePoint != Points.end() ; TimePoint++)
+				{
+					switch (options.MultiValuePoint())
+					{
+					case MultiValuePointProcess::All:
+						dense.Data_.emplace_back(t, TimePoint->v());
+						break;
+					case MultiValuePointProcess::Max:
+						MultiValue = TimePoint == Points.begin() ? TimePoint->v() : std::max(TimePoint->v(), MultiValue);
+						break;
+					case MultiValuePointProcess::Min:
+						MultiValue = TimePoint == Points.begin() ? TimePoint->v() : std::min(TimePoint->v(), MultiValue);
+						break;
+					case MultiValuePointProcess::Avg:
+						MultiValue += TimePoint->v();
+						break;
+					}
+				}
+
+				switch (options.MultiValuePoint())
+				{
+				case MultiValuePointProcess::Min:
+				case MultiValuePointProcess::Max:
+					dense.Data_.emplace_back(t, MultiValue);
+					break;
+				case MultiValuePointProcess::Avg:
+					dense.Data_.emplace_back(t, MultiValue / static_cast<double>(Points.size()));
+					break;
+				}
 			}
 			return dense;
 		}
