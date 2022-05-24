@@ -1,21 +1,26 @@
 #include "Tests.h"
 
+using TSD = typename TimeSeries::TimeSeries<double, double>;
+using TSO = typename TimeSeries::Options<double, double>;
+
 bool TimeSeriesTests::TestConstruct()
 {
 	bool ret{ true };
-	TimeSeries::TimeSeries<double, double> EmptySeries;
-	TimeSeries::TimeSeries<double, double> InitListSeries{ {1,2,3,4,5}, {1,2,3,4,5} };
+	TSD EmptySeries;
+	TSD InitListSeries{ {1,2,3,4,5}, {1,2,3,4,5} };
 	const double pt[5] = { 1,2,3,4,5 }, pv[5] = { 1,2,3,4,5 };
-	TimeSeries::TimeSeries<double, double> PtrSeries(5, pt, pv);
+	TSD PtrSeries(5, pt, pv);
+	TSD CSVSeries("tests/test1.csv");
+	CSVSeries.Data_.Dump();
 	return ret;
 }
 
 bool TimeSeriesTests::MonotonicTest()
 {
 	bool ret{ true };
-	TimeSeries::TimeSeries<double, double> monotonic({1,2,3,4,5}, {1,2,3,4,5});
+	TSD monotonic("tests/monotonic.csv");
 	ret &= !monotonic.Data_.IsMonotonic().has_value();
-	TimeSeries::TimeSeries<double, double> nonmonotonic({ 2,1,3,4,5 }, { 1,2,3,4,5 });
+	TSD nonmonotonic("tests/nonmonotonic.csv");
 	ret &= nonmonotonic.Data_.IsMonotonic().has_value();
 	if (!ret)
 		return ret;
@@ -34,13 +39,13 @@ bool TimeSeriesTests::MonotonicTest()
 bool TimeSeriesTests::GetPointsTest()
 {
 	bool ret{ true };
-	TimeSeries::Options<double, double> options;
+	TSO options;
 	options.SetTimeTolerance(0.05);
 
-	TimeSeries::TimeSeries<double, double> series({ 1,2,3,3,4,5 }, { 1,2,3,4,5,6 });
+	TSD series("tests/monotonic.csv");
 	auto start{ series.Data_.end() };
 
-	for (double t = -1.0; t < 6.0; t += 0.01)
+	for (double t = 1.96; t < 6.0; t += 0.01)
 		auto pr{ series.Data_.GetTimePoints(t, options, start) };
 
 	TimeSeries::TimeSeries<double, double> onepoint({ 1 }, { 1 });
@@ -61,14 +66,28 @@ bool TimeSeriesTests::GetPointsTest()
 	return ret;
 }
 
+bool TimeSeriesTests::DenseOutputTest()
+{
+	bool ret{ true };
+	TSD series("tests/monotonic.csv");
+	TSO options;
+	options.SetTimeTolerance(0.05);
+	auto dense{ series.DenseOutput(-1.0, 6.0, 0.01, options) };
+	dense.Data_.WriteCSV("tests/denseoutput.csv");
+	return ret;
+}
+
+ 
 bool TimeSeriesTests::TestAll()
 {
 	bool ret{ true };
 	ret &= Test(TestConstruct, "Construct");
 	ret &= Test(MonotonicTest, "Monotonic");
 	ret &= Test(GetPointsTest, "GetPoints");
+	ret &= Test(DenseOutputTest, "DenseOutput");
 	return ret;
 }
+
 
 bool TimeSeriesTests::Test(bool(*fnTest)(), std::string_view TestName)
 {

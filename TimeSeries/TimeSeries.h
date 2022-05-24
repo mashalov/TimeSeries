@@ -5,6 +5,9 @@
 #include <stdexcept>
 #include <iostream>
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <limits>
 #include "fmt/core.h"
 #include "fmt/format.h"
 
@@ -131,6 +134,16 @@ namespace TimeSeries
 				std::cout << TimePoint.t() << ";" << TimePoint.v() << std::endl;
 		}
 
+		void WriteCSV(const std::filesystem::path& path)
+		{
+			std::ofstream csvfile(path);
+			if (csvfile.is_open())
+			{
+				for (const auto& TimePoint : *this)
+					csvfile << TimePoint.t() << ";" << TimePoint.v() << std::endl;
+			}
+		}
+
 		TimeSeriesData GetTimePoints(const T& Time, const Options<T,V>& options) const
 		{
 			auto enddummy{ TimeSeriesData::end() };
@@ -219,6 +232,42 @@ namespace TimeSeries
 		{
 			for (auto pT{Times}; pT < Times + Size ; pT++)
 				Data_.emplace_back( *pT, *Values++ );
+		}
+
+		TimeSeries(const std::filesystem::path path)
+		{
+			std::ifstream csvfile(path);
+			if (csvfile.is_open())
+			{
+				double time{ 0 }, value{ 0 };
+				char semicolon{ ';' };
+				for (;;)
+				{          
+					csvfile >> time >> semicolon >> value;
+					if (csvfile.eof() || csvfile.fail())
+						break;
+					csvfile.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+					Data_.emplace_back(time, value);
+				}
+			}
+			else
+				throw Exception(fmt::format("TimeSeries::TimeSeries - failed to open {}", path.string()));
+		}
+		
+		TimeSeries DenseOutput(const T& Start, const T& End, const T& Step, const Options<T,V>&  options) const
+		{
+			TimeSeries dense;
+			auto start{ Data_.end() };
+			ptrdiff_t ti{ 0 };
+			for (; ; ti++)
+			{
+				const T t{ Start + static_cast<T>(ti) * Step };
+				if (t > End)
+					break;
+				for (const auto& TimePoint : Data_.GetTimePoints(t, options, start))
+					dense.Data_.emplace_back(TimePoint);
+			}
+			return dense;
 		}
 	};
 }

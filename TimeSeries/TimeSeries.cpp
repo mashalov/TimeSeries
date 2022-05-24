@@ -9,7 +9,7 @@ int main()
     {
         TimeSeriesTests::TestAll();
     }
-    catch (const TimeSeries::Exception& ex)
+    catch (const std::runtime_error& ex)
     {
         std::cout << ex.what() << std::endl;
     }
