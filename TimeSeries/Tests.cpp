@@ -34,8 +34,30 @@ bool TimeSeriesTests::MonotonicTest()
 bool TimeSeriesTests::GetPointsTest()
 {
 	bool ret{ true };
-	TimeSeries::TimeSeries<double, double> series({ 1,2,3,4,5 }, { 1,2,3,4,5 });
-	auto pr{ series.Data_.GetTimePoints(3.5) };
+	TimeSeries::Options<double, double> options;
+	options.SetTimeTolerance(0.05);
+
+	TimeSeries::TimeSeries<double, double> series({ 1,2,3,3,4,5 }, { 1,2,3,4,5,6 });
+	auto start{ series.Data_.end() };
+
+	for (double t = -1.0; t < 6.0; t += 0.01)
+		auto pr{ series.Data_.GetTimePoints(t, options, start) };
+
+	TimeSeries::TimeSeries<double, double> onepoint({ 1 }, { 1 });
+	start = onepoint.Data_.end();
+
+	for (double t = -1.0; t < 2.0 ; t += 1.0)
+	{
+		auto pr{ onepoint.Data_.GetTimePoints(t, options, start) };
+		ret &= pr.size() == 1 && pr.front().v() == 1.0;
+	}
+
+	TimeSeries::TimeSeries<double, double> onet({ 1, 1 }, { 2,3 });
+	start = onet.Data_.end();
+
+	for (double t = -1.0; t < 3.0; t += 1.0)
+		auto pr{ onet.Data_.GetTimePoints(t, options, start) };
+	
 	return ret;
 }
 
