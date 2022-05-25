@@ -292,19 +292,18 @@ namespace TimeSeries
 				throw Exception(fmt::format("TimeSeries::TimeSeries - failed to open {}", path.string()));
 		}
 
-
-		// Kolmogorov-Smirnov
-		// Chi - squared
 		class  CompareResult
 		{
 		protected:
-			pointT Max, Min;
-			V Sum = {};
-			V SqSum = {};
-			V Avg = {};
+			pointT Max_, Min_;
+			V Sum_ = {};
+			V SqSum_ = {};
+			V Avg_ = {};
 			bool Reset_ = true;
 			bool Finished_ = false;
 			size_t Count_ = 0;
+			V KgDiffSum_ = {};	// Kolmogorov-Smirnov accumulator
+			V KgDiff_ = {};		// Kolmogorov-Smirnov max difference
 
 		public:
 			CompareResult()
@@ -314,8 +313,13 @@ namespace TimeSeries
 
 			void Reset()
 			{
-				Count_ = 0;
+				Count_ = {};
 				Finished_ = false;
+				Sum_ = {};
+				KgDiffSum_ = {};
+				KgDiff_ = {};
+				Avg_ = {};
+				SqSum_ = {};
 			}
 
 			void Update(const TimeSeriesData& series1, const TimeSeriesData& series2)
@@ -327,26 +331,34 @@ namespace TimeSeries
 					if (Reset_)
 					{
 						Reset_ = false;
-						Max = Min = {};
+						Max_ = Min_ = {};
+						KgDiffSum_ = diff;
+						KgDiff_ = std::abs(diff);
+
 					}
 					else
 					{
 						const auto absdiff{ std::abs(diff) };
-						if (std::abs(Max.v()) < absdiff)
+						if (std::abs(Max_.v()) < absdiff)
 						{
-							Max.t(pt1->t());
-							Max.v(absdiff);
+							Max_.t(pt1->t());
+							Max_.v(absdiff);
 						}
 
-						if (std::abs(Min.v()) > absdiff)
+						if (std::abs(Min_.v()) > absdiff)
 						{
-							Min.t(pt1->t());
-							Min.v(absdiff);
+							Min_.t(pt1->t());
+							Min_.v(absdiff);
 						}
+
+						KgDiffSum_ += diff;
+						const auto KgDiffSumAbs{ std::abs(KgDiffSum_) };
+						if (KgDiffSumAbs > KgDiff_)
+							KgDiff_ = KgDiffSumAbs;
 					}
 
-					Sum += diff;
-					SqSum += diff * diff;
+					Sum_ += diff;
+					SqSum_ += diff * diff;
 					Count_++;
 				}
 			}
@@ -357,7 +369,7 @@ namespace TimeSeries
 				if (!Finished_)
 				{
 					if (Count_ > 0)
-						Avg = Sum / Count_;
+						Avg_ = Sum_ / Count_;
 					Finished_ = true;
 				}
 
@@ -366,8 +378,40 @@ namespace TimeSeries
 
 			bool Idenctical(const T& Tolerance = {}) const
 			{
-				return Max.v() <= Tolerance;
+				return Max_.v() <= Tolerance;
 			}
+
+			const V KgTest() const 
+			{
+				return KgDiff_;
+			}
+
+			const pointT Max() const
+			{
+				return Max_;
+			}
+
+			const pointT Min() const
+			{
+				return Min_;
+			}
+
+			const T Avg() const
+			{
+				return Avg_;
+			}
+
+			const T Sum() const
+			{
+				return Sum_;
+			}
+
+			const T SqSum() const
+			{
+				return SqSum_;
+			}
+
+
 		};
 
 		NonMonotonicPairT IsMonotonic() const
@@ -535,6 +579,8 @@ namespace TimeSeries
 							if (std::abs(it->v() - denom) < options.ValueTolerance())
 								continue;
 						}
+						else
+							continue;
 					}
 					compressed.emplace_back(*it);
 				}

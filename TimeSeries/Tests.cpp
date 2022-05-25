@@ -82,12 +82,26 @@ bool TimeSeriesTests::DenseOutputTest()
 bool TimeSeriesTests::CompareTest()
 {
 	bool ret{ true };
+	// Transient data
 	TSD series1{ "tests/compare1.csv" };
 	TSD series2{ "tests/compare2.csv" };
 	TSO options;
 	options.SetMultiValuePoint(TimeSeries::MultiValuePointProcess::Avg);
 	auto cr1{ series1.Compare(series2, options) };
 	auto cr2{ series2.Compare(series1, options) };
+	Test(std::abs(cr1.Max().v() - cr2.Max().v()) < 1e-14 && 
+		 std::abs(cr1.Max().t() - cr2.Max().t()) < 1e-14 && 
+		 std::abs(cr1.KgTest()  - cr2.KgTest()) < 1e-14,
+		 "Forward-reverse compare");
+
+	// Kolmogorov-Smirnov test from example
+	// https://www.researchgate.net/post/How_can_I_statistically_compare_two_curves_same_X_values_Different_Y_values_without_using_MATLAB_or_R
+	TSD series3{ "tests/kgtest1.csv" };
+	TSD series4{ "tests/kgtest2.csv" };
+	Test(std::abs(series3.Compare(series4, options).Finish().KgTest() - 0.529978470995037) < 1e-14,
+		"Kolmogorov-Smirnov test");
+
+
 	return ret;
 }
 
@@ -97,6 +111,8 @@ bool TimeSeriesTests::DifferenceTest()
 	TSD series1{ "tests/compare1.csv" };
 	TSD series2{ "tests/compare2.csv" };
 	TSO options;
+	//options.SetTimeTolerance(1e-6);
+	//options.SetValueTolerance(1e-6);
 	options.SetMultiValuePoint(TimeSeries::MultiValuePointProcess::Avg);
 	auto diff{ series1.Difference(series2, options) };
 	diff.Compress(options);
@@ -142,20 +158,20 @@ bool TimeSeriesTests::OverallTest()
 bool TimeSeriesTests::TestAll()
 {
 	bool ret{ true };
-	/*ret &= Test(TestConstruct, "Construct");
+	ret &= Test(TestConstruct, "Construct");
 	ret &= Test(MonotonicTest, "Monotonic");
 	ret &= Test(GetPointsTest, "GetPoints");
 	ret &= Test(DenseOutputTest, "DenseOutput");
 	ret &= Test(CompareTest, "Compare");
 	ret &= Test(DifferenceTest, "Difference");
-	ret &= Test(CompressTest, "Compress");*/
+	ret &= Test(CompressTest, "Compress");
 	ret &= Test(OverallTest, "Overall");
 	return ret;
 }
 
 bool TimeSeriesTests::Test(bool result, std::string_view TestName)
 {
-	std::cout << TestName << " : " << (result ? "Passed" : "Failed") << std::endl;
+	std::cout << (result ? "Passed" : "Failed !") << " : " << TestName << std::endl;
 	return result;
 }
 
