@@ -14,7 +14,9 @@ public:
 	static bool CompareTest();
 	static bool DifferenceTest();
 	static bool CompressTest();
+	static bool OverallTest();
 	static bool Test(bool (*fnTest)(), std::string_view TestName);
+	static bool Test(bool result, std::string_view TestName);
 };
 
 

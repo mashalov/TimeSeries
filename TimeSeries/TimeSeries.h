@@ -90,6 +90,15 @@ namespace TimeSeries
 	protected:
 		T TimeTolerance_ = 1E-8;
 		V ValueTolerance_ = 1E-8;
+
+		struct ProcessRange
+		{
+			std::optional<T> begin;
+			std::optional<T> end;
+		};
+
+		ProcessRange Range_;
+
 		MultiValuePointProcess MultiValuePointProcess_ = MultiValuePointProcess::All;
 		
 	public:
@@ -99,6 +108,16 @@ namespace TimeSeries
 		void SetValueTolerance(V ValueTolerance) { ValueTolerance_ = ValueTolerance; }
 		inline MultiValuePointProcess MultiValuePoint() const { return MultiValuePointProcess_; }
 		void SetMultiValuePoint(MultiValuePointProcess MultiValuePoint) { MultiValuePointProcess_ = MultiValuePoint; }
+		inline const ProcessRange& Range() const { return Range_; }
+		void SetRange(const ProcessRange& Range) { Range_ = Range; }
+		bool TimeInRange(const T& Time) const
+		{
+			if (Range_.begin.has_value() && Time < Range_.begin.value()) 
+				return false;
+			if (Range_.end.has_value() && Time >= Range_.end.value()) 
+				return false;
+			return true;
+		}
 	};
 
 	template <class charT, charT sep>
@@ -143,12 +162,14 @@ namespace TimeSeries
 
 			auto t1{ TimeSeriesData::begin() };
 			auto t2{ ExtData.begin() };
-			const auto tol{ options.TimeTolerance() * 2.0 };
+			const auto& locoptions{ options };
 
-			const auto StoreTime = [&uniontime, &tol](const T& Time) -> void
+
+			const auto StoreTime = [&uniontime, &locoptions](const T& Time) -> void
 			{
-				if (uniontime.empty() || std::abs(uniontime.back() - Time) > tol * 2.0)
-					uniontime.emplace_back(Time);
+				if(locoptions.TimeInRange(Time))
+					if (uniontime.empty() || std::abs(uniontime.back() - Time) > locoptions.TimeTolerance() * 2.0)
+						uniontime.emplace_back(Time);
 			};
 
 			while (1)
@@ -256,13 +277,11 @@ namespace TimeSeries
 				Finished_ = false;
 			}
 
-			void Update(const TimeSeriesData<T, V>& p1, const TimeSeriesData<T, V>& p2)
+			void Update(const TimeSeriesData<T, V>& series1, const TimeSeriesData<T, V>& series2)
 			{
-				if (p1.size() == 1 && p2.size() == 1)
+				for (auto pt1{ series1.begin() }, pt2{ series2.begin() }; pt1 != series1.end() && pt2 != series2.end(); pt1++, pt2++)
 				{
-					const auto& pt1{ p1.front() };
-					const auto& pt2{ p2.front() };
-					const V diff{ std::abs(pt1.v() - pt2.v()) };
+					const T diff{ pt1->v() - pt2->v() };
 
 					if (Reset_)
 					{
@@ -274,26 +293,23 @@ namespace TimeSeries
 						const auto absdiff{ std::abs(diff) };
 						if (std::abs(Max.v()) < absdiff)
 						{
-							Max.t(pt1.t());
+							Max.t(pt1->t());
 							Max.v(absdiff);
 						}
 
 						if (std::abs(Min.v()) > absdiff)
 						{
-							Min.t(pt1.t());
+							Min.t(pt1->t());
 							Min.v(absdiff);
 						}
 					}
 
 					Sum += diff;
 					SqSum += diff * diff;
-
+					Count_++;
 				}
-				else
-					throw Exception(fmt::format("CompareResult::Update - can compare single points, not sets {} {}", p1.size(), p2.size()));
-
-				Count_++;
 			}
+
 
 			CompareResult& Finish()
 			{
@@ -305,6 +321,11 @@ namespace TimeSeries
 				}
 
 				return *this;
+			}
+
+			bool Idenctical(const T& Tolerance = {}) const
+			{
+				return Max.v() <= Tolerance;
 			}
 		};
 
@@ -417,13 +438,21 @@ namespace TimeSeries
 			const auto uniontime{ UnionTime(ExtData, options) };
 			TimeSeriesData<T, V> ret;
 			ret.reserve(uniontime.size());
+
+			auto it1{ TimeSeriesData::end() };
+			auto it2{ ExtData.end() };
 			for (const auto& time : uniontime)
 			{
-				const auto op1{ GetTimePoints(time, options) };
-				const auto op2{ ExtData.GetTimePoints(time, options) };
-				if(op1.size() > 1 || op2.size() > 1)
-					throw Exception(fmt::format("TimeSeriesData::Difference can be computed for single points {} {}", op1.size(), op2.size()));
-				ret.emplace_back(time, op1.front().v() - op2.front().v());
+				const auto series1{ GetTimePoints(time, options, it1) };
+				const auto series2{ ExtData.GetTimePoints(time, options, it2) };
+
+				for (auto pt1{ series1.begin() }, pt2{ series2.begin() }; pt1 != series1.end() && pt2 != series2.end(); pt1++, pt2++)
+					ret.emplace_back(time, pt1->v() - pt2->v());
+
+				/*if (op1.size() > 1 || op2.size() > 1)
+					throw Exception(fmt::format("TimeSeriesData::Difference can be computed for single points only: got {} and {}", op1.size(), op2.size()));
+					*/
+				
 			}
 			return ret;
 		}
@@ -431,8 +460,10 @@ namespace TimeSeries
 		CompareResult Compare(const TimeSeriesData<T,V>& ExtData, const optionsT& options) const
 		{
 			CompareResult comps;
+			auto it1{ TimeSeriesData::end() };
+			auto it2{ ExtData.end() };
 			for (const auto& time : UnionTime(ExtData, options))
-				comps.Update(GetTimePoints(time, options), ExtData.GetTimePoints(time, options));
+				comps.Update(GetTimePoints(time, options, it1), ExtData.GetTimePoints(time, options, it2));
 			return comps.Finish();
 		}
 
@@ -449,17 +480,17 @@ namespace TimeSeries
 				const auto tolt{ 2.0 * options.TimeTolerance() };
 				for (; it != TimeSeriesData::end(); it++)
 				{
-					const auto prev{ std::prev(it) };
-					if (std::abs(prev->t() - it->t()) < tolt && std::abs(prev->v() - it->v()) < options.ValueTolerance())
+					const auto prev{ compressed.back() };
+					if (std::abs(prev.t() - it->t()) < tolt && std::abs(prev.v() - it->v()) < options.ValueTolerance())
 						continue;
 
 					const auto next{ std::next(it) };
 					if (next != TimeSeriesData::end())
 					{
-						auto denom{ next->t() - prev->t() };
+						auto denom{ next->t() - prev.t() };
 						if (std::abs(denom) > 0.0)
 						{
-							denom = (next->v() - prev->v()) / denom * (it->t() - prev->t()) + prev->v();
+							denom = (next->v() - prev.v()) / denom * (it->t() - prev.t()) + prev.v();
 							if (std::abs(it->v() - denom) < options.ValueTolerance())
 								continue;
 						}

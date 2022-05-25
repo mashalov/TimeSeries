@@ -114,24 +114,52 @@ bool TimeSeriesTests::CompressTest()
 	series.Data_.WriteCSV("tests/compressed.csv");
 	return ret;
 }
+
+bool TimeSeriesTests::OverallTest()
+{
+	bool ret{ true };
+	TSD series1("tests/monotonic.csv");
+	TSD series1ref({1,3,3,5}, {1,3,4,6});
+	TSO options;
+	series1.Data_.Compress(options);
+	ret &= Test(series1.Data_.Compare(series1ref.Data_, options).Idenctical(), "Monotonic compress");
+	auto dense{ series1.DenseOutput(-1.0, 7.0, 0.01, options) };
+	dense.Data_.Compress(options);
+	TSD series2ref({ -1,3,3,7 }, { -1,3,4,8 });
+	ret &= Test(dense.Data_.Compare(series2ref.Data_, options).Idenctical(), "Dense output compress");
+
+	options.SetRange({1, 5.5});
+
+	auto diff{ series2ref.Data_.Difference(series1.Data_, options) };
+	diff.Compress(options);
+
+	options.SetRange({});
+	TSD series3ref({ -1, 7 }, { 0, 0 });
+	ret &= Test(diff.Compare(series3ref.Data_, options).Idenctical(), "Diff compress");
+	return ret;
+}
  
 bool TimeSeriesTests::TestAll()
 {
 	bool ret{ true };
-	ret &= Test(TestConstruct, "Construct");
+	/*ret &= Test(TestConstruct, "Construct");
 	ret &= Test(MonotonicTest, "Monotonic");
 	ret &= Test(GetPointsTest, "GetPoints");
 	ret &= Test(DenseOutputTest, "DenseOutput");
 	ret &= Test(CompareTest, "Compare");
 	ret &= Test(DifferenceTest, "Difference");
-	ret &= Test(CompressTest, "Compress");
+	ret &= Test(CompressTest, "Compress");*/
+	ret &= Test(OverallTest, "Overall");
 	return ret;
 }
 
+bool TimeSeriesTests::Test(bool result, std::string_view TestName)
+{
+	std::cout << TestName << " : " << (result ? "Passed" : "Failed") << std::endl;
+	return result;
+}
 
 bool TimeSeriesTests::Test(bool(*fnTest)(), std::string_view TestName)
 {
-	bool ret{ (fnTest)() };
-	std::cout << TestName << " : " << (ret ? "Passed" : "Failed") << std::endl;
-	return ret;
+	return Test((fnTest)(), TestName);
 }
