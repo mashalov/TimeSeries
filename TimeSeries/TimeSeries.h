@@ -130,7 +130,7 @@ namespace TimeSeries
 
 
 	template<typename T, typename V>
-	class TimeSeriesData : public TimeSeriesDataT<T, V>
+	class TimeSeriesData : protected TimeSeriesDataT<T, V>
 	{
 		friend class TimeSeriesTests;
 		using fwitT = typename TimeSeriesData<T,V>::const_iterator;
@@ -252,6 +252,47 @@ namespace TimeSeries
 		}
 	public:
 
+		static constexpr const char* TimeSeriesDoNotMatch = "Times and Values sizes do not match: Times {} and Values {}";
+		TimeSeriesData() = default;
+
+		TimeSeriesData(std::initializer_list<const T> Times, std::initializer_list<const V> Values)
+		{
+			if (Times.size() != Values.size())
+				throw Exception(fmt::format(TimeSeriesDoNotMatch, Times.size(), Values.size()));
+
+			auto v{ std::as_const(Values).begin() };
+			for (const auto& t : Times)
+				TimeSeriesData::emplace_back(t, *v++);
+		}
+
+		TimeSeriesData(size_t Size, const T* Times, const V* Values)
+		{
+			for (auto pT{ Times }; pT < Times + Size; pT++)
+				TimeSeriesData::emplace_back(*pT, *Values++);
+		}
+
+		TimeSeriesData(const std::filesystem::path path)
+		{
+			std::ifstream csvfile(path);
+			if (csvfile.is_open())
+			{
+				csvfile.imbue(std::locale(csvfile.getloc(), new comma_facet<char, ','>));
+				double time{ 0 }, value{ 0 };
+				char semicolon{ ';' };
+				for (;;)
+				{
+					csvfile >> time >> semicolon >> value;
+					if (csvfile.eof() || csvfile.fail())
+						break;
+					csvfile.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+					TimeSeriesData::emplace_back(time, value);
+				}
+			}
+			else
+				throw Exception(fmt::format("TimeSeries::TimeSeries - failed to open {}", path.string()));
+		}
+
+
 		// Kolmogorov-Smirnov
 		// Chi - squared
 		class  CompareResult
@@ -277,7 +318,7 @@ namespace TimeSeries
 				Finished_ = false;
 			}
 
-			void Update(const TimeSeriesData<T, V>& series1, const TimeSeriesData<T, V>& series2)
+			void Update(const TimeSeriesData& series1, const TimeSeriesData& series2)
 			{
 				for (auto pt1{ series1.begin() }, pt2{ series2.begin() }; pt1 != series1.end() && pt2 != series2.end(); pt1++, pt2++)
 				{
@@ -433,10 +474,10 @@ namespace TimeSeries
 			return { retdata };
 		}
 
-		TimeSeriesData<T, V> Difference(const TimeSeriesData<T, V>& ExtData, const optionsT& options) const
+		TimeSeriesData Difference(const TimeSeriesData& ExtData, const optionsT& options) const
 		{
 			const auto uniontime{ UnionTime(ExtData, options) };
-			TimeSeriesData<T, V> ret;
+			TimeSeriesData ret;
 			ret.reserve(uniontime.size());
 
 			auto it1{ TimeSeriesData::end() };
@@ -470,7 +511,7 @@ namespace TimeSeries
 		size_t Compress(const optionsT& options)
 		{
 			size_t originalsize{ TimeSeriesData::size() };
-			TimeSeriesData<T, V> compressed;
+			TimeSeriesData compressed;
 			compressed.reserve(originalsize);
 			auto it{ TimeSeriesData::begin() };
 			if (it != TimeSeriesData::end())
@@ -501,59 +542,11 @@ namespace TimeSeries
 			TimeSeriesData::swap(compressed);
 			return originalsize - TimeSeriesData::size();
 		}
-	};
 
-
-	template<typename T, typename V>
-	class TimeSeries
-	{
-	private:
-		friend class TimeSeriesTests;
-		TimeSeriesData<T, V> Data_;
-		static constexpr const char* TimeSeriesDoNotMatch = "Times and Values sizes do not match: Times {} and Values {}";
-	public:
-		TimeSeries() = default;
-		TimeSeries(std::initializer_list<const T> Times, std::initializer_list<const V> Values)
+		TimeSeriesData DenseOutput(const T& Start, const T& End, const T& Step, const optionsT& options) const
 		{
-			if (Times.size() != Values.size())
-				throw Exception(fmt::format(TimeSeriesDoNotMatch, Times.size(), Values.size()));
-
-			auto v{ std::as_const(Values).begin()};
-			for (const auto& t : Times)
-				Data_.emplace_back( t, *v++ );
-		}
-
-		TimeSeries(size_t Size, const T* Times, const V* Values)
-		{
-			for (auto pT{Times}; pT < Times + Size ; pT++)
-				Data_.emplace_back( *pT, *Values++ );
-		}
-
-		TimeSeries(const std::filesystem::path path)
-		{
-			std::ifstream csvfile(path);
-			if (csvfile.is_open())
-			{
-				csvfile.imbue(std::locale(csvfile.getloc(), new comma_facet<char, ','>));
-				double time{ 0 }, value{ 0 };
-				char semicolon{ ';' };
-				for (;;)
-				{          
-					csvfile >> time >> semicolon >> value;
-					if (csvfile.eof() || csvfile.fail())
-						break;
-					csvfile.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-					Data_.emplace_back(time, value);
-				}
-			}
-			else
-				throw Exception(fmt::format("TimeSeries::TimeSeries - failed to open {}", path.string()));
-		}
-		
-		TimeSeries DenseOutput(const T& Start, const T& End, const T& Step, const Options<T,V>&  options) const
-		{
-			TimeSeries dense;
-			auto start{ Data_.end() };
+			TimeSeriesData dense;
+			auto start{ TimeSeriesData::end() };
 			ptrdiff_t ti{ 0 };
 			for (; ; ti++)
 			{
@@ -561,8 +554,8 @@ namespace TimeSeries
 				if (t > End)
 					break;
 
-				for(const auto& TimePoint : Data_.GetTimePoints(t, options, start))
-					dense.Data_.emplace_back(t, TimePoint.v());
+				for (const auto& TimePoint : GetTimePoints(t, options, start))
+					dense.emplace_back(t, TimePoint.v());
 			}
 			return dense;
 		}

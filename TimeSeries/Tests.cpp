@@ -1,6 +1,6 @@
 #include "Tests.h"
 
-using TSD = typename TimeSeries::TimeSeries<double, double>;
+using TSD = typename TimeSeries::TimeSeriesData<double, double>;
 using TSO = typename TimeSeries::Options<double, double>;
 
 bool TimeSeriesTests::TestConstruct()
@@ -18,15 +18,15 @@ bool TimeSeriesTests::MonotonicTest()
 {
 	bool ret{ true };
 	TSD monotonic("tests/monotonic.csv");
-	ret &= !monotonic.Data_.IsMonotonic().has_value();
+	ret &= !monotonic.IsMonotonic().has_value();
 	TSD nonmonotonic("tests/nonmonotonic.csv");
-	ret &= nonmonotonic.Data_.IsMonotonic().has_value();
+	ret &= nonmonotonic.IsMonotonic().has_value();
 	if (!ret)
 		return ret;
 	try
 	{
 		ret = false;
-		nonmonotonic.Data_.Check();
+		nonmonotonic.Check();
 	}
 	catch (const TimeSeries::Exception&)
 	{
@@ -42,25 +42,25 @@ bool TimeSeriesTests::GetPointsTest()
 	options.SetTimeTolerance(0.05);
 
 	TSD series("tests/monotonic.csv");
-	auto start{ series.Data_.end() };
+	auto start{ series.end() };
 
 	for (double t = -1.0; t < 6.0; t += 0.01)
-		auto pr{ series.Data_.GetTimePoints(t, options, start) };
+		auto pr{ series.GetTimePoints(t, options, start) };
 
-	TimeSeries::TimeSeries<double, double> onepoint({ 1 }, { 1 });
-	start = onepoint.Data_.end();
+	TSD onepoint({ 1 }, { 1 });
+	start = onepoint.end();
 
 	for (double t = -1.0; t < 2.0 ; t += 1.0)
 	{
-		auto pr{ onepoint.Data_.GetTimePoints(t, options, start) };
+		auto pr{ onepoint.GetTimePoints(t, options, start) };
 		ret &= pr.size() == 1 && pr.front().v() == 1.0;
 	}
 
-	TimeSeries::TimeSeries<double, double> onet({ 1, 1 }, { 2,3 });
-	start = onet.Data_.end();
+	TSD onet({ 1, 1 }, { 2,3 });
+	start = onet.end();
 
 	for (double t = -1.0; t < 3.0; t += 1.0)
-		auto pr{ onet.Data_.GetTimePoints(t, options, start) };
+		auto pr{ onet.GetTimePoints(t, options, start) };
 	
 	return ret;
 }
@@ -73,8 +73,8 @@ bool TimeSeriesTests::DenseOutputTest()
 	//options.SetTimeTolerance(0.005);
 	options.SetMultiValuePoint(TimeSeries::MultiValuePointProcess::Avg);
 	auto dense{ series.DenseOutput(-1.0, 6.0, 0.01, options) };
-	dense.Data_.WriteCSV("tests/denseoutput.csv");
-	dense.Data_.Compare(series.Data_, options);
+	dense.WriteCSV("tests/denseoutput.csv");
+	dense.Compare(series, options);
 	return ret;
 }
 
@@ -86,8 +86,8 @@ bool TimeSeriesTests::CompareTest()
 	TSD series2{ "tests/compare2.csv" };
 	TSO options;
 	options.SetMultiValuePoint(TimeSeries::MultiValuePointProcess::Avg);
-	auto cr1{ series1.Data_.Compare(series2.Data_, options) };
-	auto cr2{ series2.Data_.Compare(series1.Data_, options) };
+	auto cr1{ series1.Compare(series2, options) };
+	auto cr2{ series2.Compare(series1, options) };
 	return ret;
 }
 
@@ -98,7 +98,7 @@ bool TimeSeriesTests::DifferenceTest()
 	TSD series2{ "tests/compare2.csv" };
 	TSO options;
 	options.SetMultiValuePoint(TimeSeries::MultiValuePointProcess::Avg);
-	auto diff{ series1.Data_.Difference(series2.Data_, options) };
+	auto diff{ series1.Difference(series2, options) };
 	diff.Compress(options);
 	diff.WriteCSV("tests/diff.csv");
 	return ret;
@@ -110,8 +110,8 @@ bool TimeSeriesTests::CompressTest()
 	TSD series("tests/monotonic.csv");
 	TSO options;
 	options.SetMultiValuePoint(TimeSeries::MultiValuePointProcess::Avg);
-	series.Data_.Compress(options);
-	series.Data_.WriteCSV("tests/compressed.csv");
+	series.Compress(options);
+	series.WriteCSV("tests/compressed.csv");
 	return ret;
 }
 
@@ -121,21 +121,21 @@ bool TimeSeriesTests::OverallTest()
 	TSD series1("tests/monotonic.csv");
 	TSD series1ref({1,3,3,5}, {1,3,4,6});
 	TSO options;
-	series1.Data_.Compress(options);
-	ret &= Test(series1.Data_.Compare(series1ref.Data_, options).Idenctical(), "Monotonic compress");
+	series1.Compress(options);
+	ret &= Test(series1.Compare(series1ref, options).Idenctical(), "Monotonic compress");
 	auto dense{ series1.DenseOutput(-1.0, 7.0, 0.01, options) };
-	dense.Data_.Compress(options);
+	dense.Compress(options);
 	TSD series2ref({ -1,3,3,7 }, { -1,3,4,8 });
-	ret &= Test(dense.Data_.Compare(series2ref.Data_, options).Idenctical(), "Dense output compress");
+	ret &= Test(dense.Compare(series2ref, options).Idenctical(), "Dense output compress");
 
 	options.SetRange({1, 5.5});
 
-	auto diff{ series2ref.Data_.Difference(series1.Data_, options) };
+	auto diff{ series2ref.Difference(series1, options) };
 	diff.Compress(options);
 
 	options.SetRange({});
 	TSD series3ref({ -1, 7 }, { 0, 0 });
-	ret &= Test(diff.Compare(series3ref.Data_, options).Idenctical(), "Diff compress");
+	ret &= Test(diff.Compare(series3ref, options).Idenctical(), "Diff compress");
 	return ret;
 }
  
