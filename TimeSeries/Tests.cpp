@@ -11,7 +11,6 @@ bool TimeSeriesTests::TestConstruct()
 	const double pt[5] = { 1,2,3,4,5 }, pv[5] = { 1,2,3,4,5 };
 	TSD PtrSeries(5, pt, pv);
 	TSD CSVSeries("tests/test1.csv");
-	CSVSeries.Data_.Dump();
 	return ret;
 }
 
@@ -71,13 +70,50 @@ bool TimeSeriesTests::DenseOutputTest()
 	bool ret{ true };
 	TSD series("tests/monotonic.csv");
 	TSO options;
-	options.SetTimeTolerance(0.005);
-	options.SetMultiValuePoint(TimeSeries::MultiValuePointProcess::All);
+	//options.SetTimeTolerance(0.005);
+	options.SetMultiValuePoint(TimeSeries::MultiValuePointProcess::Avg);
 	auto dense{ series.DenseOutput(-1.0, 6.0, 0.01, options) };
 	dense.Data_.WriteCSV("tests/denseoutput.csv");
+	dense.Data_.Compare(series.Data_, options);
 	return ret;
 }
 
+
+bool TimeSeriesTests::CompareTest()
+{
+	bool ret{ true };
+	TSD series1{ "tests/compare1.csv" };
+	TSD series2{ "tests/compare2.csv" };
+	TSO options;
+	options.SetMultiValuePoint(TimeSeries::MultiValuePointProcess::Avg);
+	auto cr1{ series1.Data_.Compare(series2.Data_, options) };
+	auto cr2{ series2.Data_.Compare(series1.Data_, options) };
+	return ret;
+}
+
+bool TimeSeriesTests::DifferenceTest()
+{
+	bool ret{ true };
+	TSD series1{ "tests/compare1.csv" };
+	TSD series2{ "tests/compare2.csv" };
+	TSO options;
+	options.SetMultiValuePoint(TimeSeries::MultiValuePointProcess::Avg);
+	auto diff{ series1.Data_.Difference(series2.Data_, options) };
+	diff.Compress(options);
+	diff.WriteCSV("tests/diff.csv");
+	return ret;
+}
+
+bool TimeSeriesTests::CompressTest()
+{
+	bool ret{ true };
+	TSD series("tests/monotonic.csv");
+	TSO options;
+	options.SetMultiValuePoint(TimeSeries::MultiValuePointProcess::Avg);
+	series.Data_.Compress(options);
+	series.Data_.WriteCSV("tests/compressed.csv");
+	return ret;
+}
  
 bool TimeSeriesTests::TestAll()
 {
@@ -86,6 +122,9 @@ bool TimeSeriesTests::TestAll()
 	ret &= Test(MonotonicTest, "Monotonic");
 	ret &= Test(GetPointsTest, "GetPoints");
 	ret &= Test(DenseOutputTest, "DenseOutput");
+	ret &= Test(CompareTest, "Compare");
+	ret &= Test(DifferenceTest, "Difference");
+	ret &= Test(CompressTest, "Compress");
 	return ret;
 }
 
