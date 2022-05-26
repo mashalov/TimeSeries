@@ -91,14 +91,14 @@ bool TimeSeriesTests::CompareTest()
 	auto cr2{ series2.Compare(series1, options) };
 	Test(std::abs(cr1.Max().v() - cr2.Max().v()) < 1e-14 && 
 		 std::abs(cr1.Max().t() - cr2.Max().t()) < 1e-14 && 
-		 std::abs(cr1.KgTest()  - cr2.KgTest()) < 1e-14,
+		 std::abs(cr1.KSTest()  - cr2.KSTest()) < 1e-14,
 		 "Forward-reverse compare");
 
 	// Kolmogorov-Smirnov test from example
 	// https://www.researchgate.net/post/How_can_I_statistically_compare_two_curves_same_X_values_Different_Y_values_without_using_MATLAB_or_R
-	TSD series3{ "tests/kgtest1.csv" };
-	TSD series4{ "tests/kgtest2.csv" };
-	Test(std::abs(series3.Compare(series4, options).Finish().KgTest() - 0.529978470995037) < 1e-14,
+	TSD series3{ "tests/kstest1.csv" };
+	TSD series4{ "tests/kstest2.csv" };
+	Test(std::abs(series3.Compare(series4, options).Finish().KSTest() - 0.529978470995037) < 1e-14,
 		"Kolmogorov-Smirnov test");
 
 

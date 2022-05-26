@@ -90,6 +90,8 @@ namespace TimeSeries
 	protected:
 		T TimeTolerance_ = 1E-8;
 		V ValueTolerance_ = 1E-8;
+		V Atol_ = 1.0;
+		V Rtol_ = 0.0;
 
 		struct ProcessRange
 		{
@@ -118,6 +120,10 @@ namespace TimeSeries
 				return false;
 			return true;
 		}
+		V Atol() const { return Atol_; }
+		V Rtol() const { return Rtol_; }
+		void SetAtol(const V& Atol) { Atol_ = Atol; }
+		void SetRtol(const V& Rtol) { Rtol_ = Rtol; }
 	};
 
 	template <class charT, charT sep>
@@ -223,10 +229,10 @@ namespace TimeSeries
 				switch (options.MultiValuePoint())
 				{
 				case MultiValuePointProcess::Max:
-					MultiValue = TimePoint == TimeSeriesData::begin() ? TimePoint->v() : std::max(TimePoint->v(), MultiValue);
+					MultiValue = TimePoint == TimeSeriesData::begin() ? TimePoint->v() : (std::max)(TimePoint->v(), MultiValue);
 					break;
 				case MultiValuePointProcess::Min:
-					MultiValue = TimePoint == TimeSeriesData::begin() ? TimePoint->v() : std::min(TimePoint->v(), MultiValue);
+					MultiValue = TimePoint == TimeSeriesData::begin() ? TimePoint->v() : (std::min)(TimePoint->v(), MultiValue);
 					break;
 				case MultiValuePointProcess::Avg:
 					MultiValue += TimePoint->v();
@@ -284,7 +290,7 @@ namespace TimeSeries
 					csvfile >> time >> semicolon >> value;
 					if (csvfile.eof() || csvfile.fail())
 						break;
-					csvfile.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+					csvfile.ignore((std::numeric_limits<std::streamsize>::max)(), '\n');
 					TimeSeriesData::emplace_back(time, value);
 				}
 			}
@@ -295,15 +301,32 @@ namespace TimeSeries
 		class  CompareResult
 		{
 		protected:
-			pointT Max_, Min_;
+
+			class MinMaxData : public pointT
+			{
+			protected:
+				V v1_ = {};
+				V v2_ = {};
+			public:
+				V v1() const { return v1_; }
+				V v2() const { return v2_; }
+				void v1(V v) { v1_ = v; }
+				void v2(V v) { v2_ = v; }
+			};
+			MinMaxData Max_, Min_;
 			V Sum_ = {};
 			V SqSum_ = {};
 			V Avg_ = {};
 			bool Reset_ = true;
 			bool Finished_ = false;
 			size_t Count_ = 0;
-			V KgDiffSum_ = {};	// Kolmogorov-Smirnov accumulator
-			V KgDiff_ = {};		// Kolmogorov-Smirnov max difference
+			V KSDiffSum_ = {};	// Kolmogorov-Smirnov accumulator
+			V KSDiff_ = {};		// Kolmogorov-Smirnov max difference
+
+			inline static V WeightedDifference(const V& v1, const V& v2, const optionsT& options)
+			{
+				return std::abs((v1 - v2 / (options.Rtol() * std::abs(v1) + options.Atol())));
+			}
 
 		public:
 			CompareResult()
@@ -316,13 +339,13 @@ namespace TimeSeries
 				Count_ = {};
 				Finished_ = false;
 				Sum_ = {};
-				KgDiffSum_ = {};
-				KgDiff_ = {};
+				KSDiffSum_ = {};
+				KSDiff_ = {};
 				Avg_ = {};
 				SqSum_ = {};
 			}
 
-			void Update(const TimeSeriesData& series1, const TimeSeriesData& series2)
+			void Update(const TimeSeriesData& series1, const TimeSeriesData& series2, const optionsT& options)
 			{
 				for (auto pt1{ series1.begin() }, pt2{ series2.begin() }; pt1 != series1.end() && pt2 != series2.end(); pt1++, pt2++)
 				{
@@ -331,30 +354,44 @@ namespace TimeSeries
 					if (Reset_)
 					{
 						Reset_ = false;
-						Max_ = Min_ = {};
-						KgDiffSum_ = diff;
-						KgDiff_ = std::abs(diff);
+
+						Max_.t(pt1->t());
+						Max_.v(CompareResult::WeightedDifference(pt1->v(), pt2->v(), options));
+						Max_.v1(pt1->v());
+						Max_.v2(pt2->v());
+
+						Min_.t(pt1->t());
+						Min_.v(CompareResult::WeightedDifference(pt1->v(), pt2->v(), options));
+						Min_.v1(pt1->v());
+						Min_.v2(pt2->v());
+
+						KSDiffSum_ = diff;
+						KSDiff_ = std::abs(diff);
 
 					}
 					else
 					{
-						const auto absdiff{ std::abs(diff) };
-						if (std::abs(Max_.v()) < absdiff)
+						const auto wd { WeightedDifference(pt1->v(), pt2->v(), options)};
+						if (std::abs(Max_.v()) < wd)
 						{
 							Max_.t(pt1->t());
-							Max_.v(absdiff);
+							Max_.v(wd);
+							Max_.v1(pt1->v());
+							Max_.v2(pt2->v());
 						}
 
-						if (std::abs(Min_.v()) > absdiff)
+						if (std::abs(Min_.v()) > wd)
 						{
 							Min_.t(pt1->t());
-							Min_.v(absdiff);
+							Min_.v(wd);
+							Min_.v1(pt1->v());
+							Min_.v2(pt2->v());
 						}
 
-						KgDiffSum_ += diff;
-						const auto KgDiffSumAbs{ std::abs(KgDiffSum_) };
-						if (KgDiffSumAbs > KgDiff_)
-							KgDiff_ = KgDiffSumAbs;
+						KSDiffSum_ += diff;
+						const auto KSDiffSumAbs{ std::abs(KSDiffSum_) };
+						if (KSDiffSumAbs > KSDiff_)
+							KSDiff_ = KSDiffSumAbs;
 					}
 
 					Sum_ += diff;
@@ -381,17 +418,17 @@ namespace TimeSeries
 				return Max_.v() <= Tolerance;
 			}
 
-			const V KgTest() const 
+			const V KSTest() const 
 			{
-				return KgDiff_;
+				return KSDiff_;
 			}
 
-			const pointT Max() const
+			const MinMaxData Max() const
 			{
 				return Max_;
 			}
 
-			const pointT Min() const
+			const MinMaxData Min() const
 			{
 				return Min_;
 			}
@@ -548,7 +585,7 @@ namespace TimeSeries
 			auto it1{ TimeSeriesData::end() };
 			auto it2{ ExtData.end() };
 			for (const auto& time : UnionTime(ExtData, options))
-				comps.Update(GetTimePoints(time, options, it1), ExtData.GetTimePoints(time, options, it2));
+				comps.Update(GetTimePoints(time, options, it1), ExtData.GetTimePoints(time, options, it2), options);
 			return comps.Finish();
 		}
 
