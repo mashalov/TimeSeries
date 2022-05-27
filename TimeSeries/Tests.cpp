@@ -178,7 +178,7 @@ bool TimeSeriesTests::TestAll()
 
 bool TimeSeriesTests::Test(bool result, const std::string_view TestName)
 {
-	std::cout << (result ? "Passed" : "Failed !") << " : " << TestName << std::endl;
+	std::cout << (result ? "Passed" : "!!! Failed !!!") << " : " << TestName << std::endl;
 	return result;
 }
 

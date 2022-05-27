@@ -329,9 +329,14 @@ namespace timeseries
 			V KSDiffSum_ = {};	// Kolmogorov-Smirnov accumulator
 			V KSDiff_ = {};		// Kolmogorov-Smirnov max difference
 
+			inline static V AbsWeightedDifference(const V& v1, const V& v2, const Options& options)
+			{
+				return std::abs(CompareResult::WeightedDifference(v1, v2, options));
+			}
+
 			inline static V WeightedDifference(const V& v1, const V& v2, const Options& options)
 			{
-				return std::abs((v1 - v2 / (options.Rtol() * std::abs(v1) + options.Atol())));
+				return (v1 - v2) / (options.Rtol() * std::abs((std::max)(v1, v2)) + options.Atol());
 			}
 
 		public:
@@ -362,12 +367,12 @@ namespace timeseries
 						Reset_ = false;
 
 						Max_.t(pt1->t());
-						Max_.v(CompareResult::WeightedDifference(pt1->v(), pt2->v(), options));
+						Max_.v(CompareResult::AbsWeightedDifference(pt1->v(), pt2->v(), options));
 						Max_.v1(pt1->v());
 						Max_.v2(pt2->v());
 
 						Min_.t(pt1->t());
-						Min_.v(CompareResult::WeightedDifference(pt1->v(), pt2->v(), options));
+						Min_.v(CompareResult::AbsWeightedDifference(pt1->v(), pt2->v(), options));
 						Min_.v1(pt1->v());
 						Min_.v2(pt2->v());
 
@@ -377,19 +382,19 @@ namespace timeseries
 					}
 					else
 					{
-						const auto wd { WeightedDifference(pt1->v(), pt2->v(), options)};
-						if (std::abs(Max_.v()) < wd)
+						const auto awd { AbsWeightedDifference(pt1->v(), pt2->v(), options)};
+						if (std::abs(Max_.v()) < awd)
 						{
 							Max_.t(pt1->t());
-							Max_.v(wd);
+							Max_.v(awd);
 							Max_.v1(pt1->v());
 							Max_.v2(pt2->v());
 						}
 
-						if (std::abs(Min_.v()) > wd)
+						if (std::abs(Min_.v()) > awd)
 						{
 							Min_.t(pt1->t());
-							Min_.v(wd);
+							Min_.v(awd);
 							Min_.v1(pt1->v());
 							Min_.v2(pt2->v());
 						}
