@@ -1,16 +1,16 @@
 #include "Tests.h"
 
-using namespace TimeSeriesTest;
+using namespace timeseries_test;
 
-using TSD = typename TimeSeries::TS<double, double>;
-using TSO = typename TimeSeries::Options<double, double>;
+using TSD = typename timeseries::TimeSeries<double, double>;
+using TSO = typename TSD::Options;
 
 std::filesystem::path TimeSeriesTests::TestPath(const std::filesystem::path& testpath)
 {
 	return std::filesystem::path(TIMESERIES_TEST_PATH) /= testpath;
 }
 
-bool TimeSeriesTest::TimeSeriesTests::TestConstruct()
+bool TimeSeriesTests::TestConstruct()
 {
 	bool ret{ true };
 	TSD EmptySeries;
@@ -21,7 +21,7 @@ bool TimeSeriesTest::TimeSeriesTests::TestConstruct()
 	return ret;
 }
 
-bool TimeSeriesTest::TimeSeriesTests::MonotonicTest()
+bool TimeSeriesTests::MonotonicTest()
 {
 	bool ret{ true };
 	TSD monotonic(TimeSeriesTests::TestPath("tests/monotonic.csv"));
@@ -35,14 +35,14 @@ bool TimeSeriesTest::TimeSeriesTests::MonotonicTest()
 		ret = false;
 		nonmonotonic.Check();
 	}
-	catch (const TimeSeries::Exception&)
+	catch (const timeseries::Exception&)
 	{
 		ret = true;
 	}
 	return ret;
 }
 
-bool TimeSeriesTest::TimeSeriesTests::GetPointsTest()
+bool TimeSeriesTests::GetPointsTest()
 {
 	bool ret{ true };
 	TSO options;
@@ -72,13 +72,13 @@ for (double t = -1.0; t < 6.0; t += 0.01)
 	return ret;
 }
 
-bool TimeSeriesTest::TimeSeriesTests::DenseOutputTest()
+bool TimeSeriesTests::DenseOutputTest()
 {
 	bool ret{ true };
 	TSD series(TimeSeriesTests::TestPath("tests/monotonic.csv"));
 	TSO options;
 	//options.SetTimeTolerance(0.005);
-	options.SetMultiValuePoint(TimeSeries::MultiValuePointProcess::Avg);
+	options.SetMultiValuePoint(timeseries::MultiValuePointProcess::Avg);
 	auto dense{ series.DenseOutput(-1.0, 6.0, 0.01, options) };
 	dense.WriteCSV(TimeSeriesTests::TestPath("tests/denseoutput.csv"));
 	dense.Compare(series, options);
@@ -86,14 +86,14 @@ bool TimeSeriesTest::TimeSeriesTests::DenseOutputTest()
 }
 
 
-bool TimeSeriesTest::TimeSeriesTests::CompareTest()
+bool TimeSeriesTests::CompareTest()
 {
 	bool ret{ true };
 	// Transient data
 	TSD series1{ TimeSeriesTests::TestPath("tests/compare1.csv") };
 	TSD series2{ TimeSeriesTests::TestPath("tests/compare2.csv") };
 	TSO options;
-	options.SetMultiValuePoint(TimeSeries::MultiValuePointProcess::Avg);
+	options.SetMultiValuePoint(timeseries::MultiValuePointProcess::Avg);
 	auto cr1{ series1.Compare(series2, options) };
 	auto cr2{ series2.Compare(series1, options) };
 	Test(std::abs(cr1.Max().v() - cr2.Max().v()) < 1e-14 && 
@@ -112,7 +112,7 @@ bool TimeSeriesTest::TimeSeriesTests::CompareTest()
 	return ret;
 }
 
-bool TimeSeriesTest::TimeSeriesTests::DifferenceTest()
+bool TimeSeriesTests::DifferenceTest()
 {
 	bool ret{ true };
 	TSD series1{ TimeSeriesTests::TestPath("tests/compare1.csv") };
@@ -120,25 +120,25 @@ bool TimeSeriesTest::TimeSeriesTests::DifferenceTest()
 	TSO options;
 	//options.SetTimeTolerance(1e-6);
 	//options.SetValueTolerance(1e-6);
-	options.SetMultiValuePoint(TimeSeries::MultiValuePointProcess::Avg);
+	options.SetMultiValuePoint(timeseries::MultiValuePointProcess::Avg);
 	auto diff{ series1.Difference(series2, options) };
 	diff.Compress(options);
 	diff.WriteCSV(TimeSeriesTests::TestPath("tests/diff.csv"));
 	return ret;
 }
 
-bool TimeSeriesTest::TimeSeriesTests::CompressTest()
+bool TimeSeriesTests::CompressTest()
 {
 	bool ret{ true };
 	TSD series(TimeSeriesTests::TestPath("tests/monotonic.csv"));
 	TSO options;
-	options.SetMultiValuePoint(TimeSeries::MultiValuePointProcess::Avg);
+	options.SetMultiValuePoint(timeseries::MultiValuePointProcess::Avg);
 	series.Compress(options);
 	series.WriteCSV(TimeSeriesTests::TestPath("tests/compressed.csv"));
 	return ret;
 }
 
-bool TimeSeriesTest::TimeSeriesTests::OverallTest()
+bool TimeSeriesTests::OverallTest()
 {
 	bool ret{ true };
 	TSD series1(TimeSeriesTests::TestPath("tests/monotonic.csv"));
@@ -162,7 +162,7 @@ bool TimeSeriesTest::TimeSeriesTests::OverallTest()
 	return ret;
 }
  
-bool TimeSeriesTest::TimeSeriesTests::TestAll()
+bool TimeSeriesTests::TestAll()
 {
 	bool ret{ true };
 	ret &= Test(TestConstruct, "Construct");
@@ -176,13 +176,13 @@ bool TimeSeriesTest::TimeSeriesTests::TestAll()
 	return ret;
 }
 
-bool TimeSeriesTest::TimeSeriesTests::Test(bool result, const std::string_view TestName)
+bool TimeSeriesTests::Test(bool result, const std::string_view TestName)
 {
 	std::cout << (result ? "Passed" : "Failed !") << " : " << TestName << std::endl;
 	return result;
 }
 
-bool TimeSeriesTest::TimeSeriesTests::Test(bool(*fnTest)(), const std::string_view TestName)
+bool TimeSeriesTests::Test(bool(*fnTest)(), const std::string_view TestName)
 {
 	return Test((fnTest)(), TestName);
 }

@@ -6,7 +6,7 @@
 #define TIMESERIES_TEST_PATH ""
 #endif
 
-namespace TimeSeriesTest
+namespace timeseries_test
 {
 	class TimeSeriesTests
 	{

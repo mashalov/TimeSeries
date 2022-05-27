@@ -12,20 +12,21 @@
 #include "fmt/core.h"
 #include "fmt/format.h"
 
-namespace TimeSeriesTest
+// test namespace forward declaration
+// for test functions friending
+namespace timeseries_test
 {
 	class TimeSeriesTests;
 };
 
-
-namespace TimeSeries
+namespace timeseries
 {
 	class Exception : public std::runtime_error
 	{
 	public:
-		using std::runtime_error::runtime_error;
+		template <typename... Args>
+		Exception(std::string_view Format, Args&&... args) : std::runtime_error(fmt::format(Format, args...)) {}
 	};
-
 	
 	template<typename T, typename V>
 	class PointT
@@ -48,7 +49,7 @@ namespace TimeSeries
 	template<typename T, typename V>
 	class Interpolator
 	{
-		using DataT = typename TimeSeries::TimeSeriesDataT<T, V>;
+		using DataT = typename timeseries::TimeSeriesDataT<T, V>;
 	public:
 		V Get(const DataT& Data, typename DataT::const_iterator& Place, const T& Time) const
 		{
@@ -76,7 +77,7 @@ namespace TimeSeries
 					return (Interpolate)(PrevPlace->t(), PrevPlace->v(), Place->t(), Place->v(), Time);
 				}
 
-			throw Exception(fmt::format("Interpolator::Get - Failed at t={}", Time));
+			throw Exception("Interpolator::Get - Failed at t={}", Time);
 		}
 	};
 
@@ -86,48 +87,6 @@ namespace TimeSeries
 		Max,
 		Min,
 		Avg
-	};
-
-	template<typename T, typename V>
-	class Options
-	{
-	protected:
-		T TimeTolerance_ = 1E-8;
-		V ValueTolerance_ = 1E-8;
-		V Atol_ = 1.0;
-		V Rtol_ = 0.0;
-
-		struct ProcessRange
-		{
-			std::optional<T> begin;
-			std::optional<T> end;
-		};
-
-		ProcessRange Range_;
-
-		MultiValuePointProcess MultiValuePointProcess_ = MultiValuePointProcess::All;
-		
-	public:
-		inline T TimeTolerance() const { return TimeTolerance_; }
-		void SetTimeTolerance(T TimeTolerance) { TimeTolerance_ = TimeTolerance; }
-		inline V ValueTolerance() const { return ValueTolerance_; }
-		void SetValueTolerance(V ValueTolerance) { ValueTolerance_ = ValueTolerance; }
-		inline MultiValuePointProcess MultiValuePoint() const { return MultiValuePointProcess_; }
-		void SetMultiValuePoint(MultiValuePointProcess MultiValuePoint) { MultiValuePointProcess_ = MultiValuePoint; }
-		inline const ProcessRange& Range() const { return Range_; }
-		void SetRange(const ProcessRange& Range) { Range_ = Range; }
-		bool TimeInRange(const T& Time) const
-		{
-			if (Range_.begin.has_value() && Time < Range_.begin.value()) 
-				return false;
-			if (Range_.end.has_value() && Time >= Range_.end.value()) 
-				return false;
-			return true;
-		}
-		V Atol() const { return Atol_; }
-		V Rtol() const { return Rtol_; }
-		void SetAtol(const V& Atol) { Atol_ = Atol; }
-		void SetRtol(const V& Rtol) { Rtol_ = Rtol; }
 	};
 
 	template <class charT, charT sep>
@@ -142,10 +101,54 @@ namespace TimeSeries
 	template<typename T, typename V>
 	class TimeSeriesData : protected TimeSeriesDataT<T, V>
 	{
-		friend class TimeSeriesTest::TimeSeriesTests;
+	public:
+		class OptionsT
+		{
+		protected:
+			T TimeTolerance_ = 1E-8;
+			V ValueTolerance_ = 1E-8;
+			// comparing function of v1 and v2 : (v2 - v1)/(Rtol * abs(v1) + Atol)
+			V Atol_ = 1.0;		// absolute tolerance
+			V Rtol_ = 0.0;		// relative tolerance
+
+			struct ProcessRange
+			{
+				std::optional<T> begin;
+				std::optional<T> end;
+			};
+
+			ProcessRange Range_;
+
+			MultiValuePointProcess MultiValuePointProcess_ = MultiValuePointProcess::All;
+
+		public:
+			inline T TimeTolerance() const { return TimeTolerance_; }
+			void SetTimeTolerance(T TimeTolerance) { TimeTolerance_ = TimeTolerance; }
+			inline V ValueTolerance() const { return ValueTolerance_; }
+			void SetValueTolerance(V ValueTolerance) { ValueTolerance_ = ValueTolerance; }
+			inline MultiValuePointProcess MultiValuePoint() const { return MultiValuePointProcess_; }
+			void SetMultiValuePoint(MultiValuePointProcess MultiValuePoint) { MultiValuePointProcess_ = MultiValuePoint; }
+			inline const ProcessRange& Range() const { return Range_; }
+			void SetRange(const ProcessRange& Range) { Range_ = Range; }
+			bool TimeInRange(const T& Time) const
+			{
+				if (Range_.begin.has_value() && Time < Range_.begin.value())
+					return false;
+				if (Range_.end.has_value() && Time >= Range_.end.value())
+					return false;
+				return true;
+			}
+			V Atol() const { return Atol_; }
+			V Rtol() const { return Rtol_; }
+			void SetAtol(const V& Atol) { Atol_ = Atol; }
+			void SetRtol(const V& Rtol) { Rtol_ = Rtol; }
+		};
+
+		using Options = typename TimeSeriesData::OptionsT;
+	protected:
+		friend class timeseries_test::TimeSeriesTests;
 		using fwitT = typename TimeSeriesData<T,V>::const_iterator;
-		using pointT = typename TimeSeries::PointT<T, V>;
-		using optionsT = typename TimeSeries::Options<T, V>;
+		using pointT = typename timeseries::PointT<T, V>;
 		using NonMonotonicPairT = std::optional<std::pair<const pointT&, const pointT&>>;
 		mutable bool Checked_ = false;
 		void Check() const
@@ -154,9 +157,9 @@ namespace TimeSeries
 				return;
 
 			if (auto monotonic{ IsMonotonic() }; monotonic.has_value())
-				throw Exception(fmt::format("TimeSeriesData::Check - time series is not monotonic : [{}] > [{}]",
+				throw Exception("TimeSeriesData::Check - time series is not monotonic : [{}] > [{}]",
 					monotonic.value().first.t(),
-					monotonic.value().second.t()));
+					monotonic.value().second.t());
 
 			Checked_ = true;
 		}
@@ -166,7 +169,7 @@ namespace TimeSeries
 			return { Time - HalfTolerance, Time + HalfTolerance };
 		}
 
-		std::vector<T> UnionTime(const TimeSeriesData& ExtData, const optionsT& options) const
+		std::vector<T> UnionTime(const TimeSeriesData& ExtData, const Options& options) const
 		{
 			std::vector<T> uniontime;
 
@@ -217,8 +220,7 @@ namespace TimeSeries
 			return uniontime;
 		}
 
-
-		TimeSeriesData& Aggregate(const T& Time, const optionsT& options)
+		TimeSeriesData& Aggregate(const T& Time, const Options& options)
 		{
 			if (options.MultiValuePoint() == MultiValuePointProcess::All || TimeSeriesData::size() < 2)
 				return *this;
@@ -268,7 +270,7 @@ namespace TimeSeries
 		TimeSeriesData(std::initializer_list<const T> Times, std::initializer_list<const V> Values)
 		{
 			if (Times.size() != Values.size())
-				throw Exception(fmt::format(TimeSeriesDoNotMatch, Times.size(), Values.size()));
+				throw Exception(TimeSeriesDoNotMatch, Times.size(), Values.size());
 
 			auto v{ std::as_const(Values).begin() };
 			for (const auto& t : Times)
@@ -299,7 +301,7 @@ namespace TimeSeries
 				}
 			}
 			else
-				throw Exception(fmt::format("TimeSeries::TimeSeries - failed to open {}", path.string()));
+				throw Exception("TimeSeries::TimeSeries - failed to open {}", path.string());
 		}
 
 		class  CompareResult
@@ -327,7 +329,7 @@ namespace TimeSeries
 			V KSDiffSum_ = {};	// Kolmogorov-Smirnov accumulator
 			V KSDiff_ = {};		// Kolmogorov-Smirnov max difference
 
-			inline static V WeightedDifference(const V& v1, const V& v2, const optionsT& options)
+			inline static V WeightedDifference(const V& v1, const V& v2, const Options& options)
 			{
 				return std::abs((v1 - v2 / (options.Rtol() * std::abs(v1) + options.Atol())));
 			}
@@ -349,7 +351,7 @@ namespace TimeSeries
 				SqSum_ = {};
 			}
 
-			void Update(const TimeSeriesData& series1, const TimeSeriesData& series2, const optionsT& options)
+			void Update(const TimeSeriesData& series1, const TimeSeriesData& series2, const Options& options)
 			{
 				for (auto pt1{ series1.begin() }, pt2{ series2.begin() }; pt1 != series1.end() && pt2 != series2.end(); pt1++, pt2++)
 				{
@@ -492,13 +494,13 @@ namespace TimeSeries
 			}
 		}
 
-		TimeSeriesData GetTimePoints(const T& Time, const optionsT& options) const
+		TimeSeriesData GetTimePoints(const T& Time, const Options& options) const
 		{
 			auto enddummy{ TimeSeriesData::end() };
 			return GetTimePoints(Time, options, enddummy);
 		}
 
-		TimeSeriesData GetTimePoints(const T& Time, const optionsT& options, fwitT& Start) const
+		TimeSeriesData GetTimePoints(const T& Time, const Options& options, fwitT& Start) const
 		{
 			Check();
 
@@ -559,7 +561,7 @@ namespace TimeSeries
 			return { retdata };
 		}
 
-		TimeSeriesData Difference(const TimeSeriesData& ExtData, const optionsT& options) const
+		TimeSeriesData Difference(const TimeSeriesData& ExtData, const Options& options) const
 		{
 			const auto uniontime{ UnionTime(ExtData, options) };
 			TimeSeriesData ret;
@@ -574,16 +576,11 @@ namespace TimeSeries
 
 				for (auto pt1{ series1.begin() }, pt2{ series2.begin() }; pt1 != series1.end() && pt2 != series2.end(); pt1++, pt2++)
 					ret.emplace_back(time, pt1->v() - pt2->v());
-
-				/*if (op1.size() > 1 || op2.size() > 1)
-					throw Exception(fmt::format("TimeSeriesData::Difference can be computed for single points only: got {} and {}", op1.size(), op2.size()));
-					*/
-				
 			}
 			return ret;
 		}
 
-		CompareResult Compare(const TimeSeriesData<T,V>& ExtData, const optionsT& options) const
+		CompareResult Compare(const TimeSeriesData<T,V>& ExtData, const Options& options) const
 		{
 			CompareResult comps;
 			auto it1{ TimeSeriesData::end() };
@@ -593,7 +590,7 @@ namespace TimeSeries
 			return comps.Finish();
 		}
 
-		size_t Compress(const optionsT& options)
+		size_t Compress(const Options& options)
 		{
 			size_t originalsize{ TimeSeriesData::size() };
 			TimeSeriesData compressed;
@@ -630,7 +627,7 @@ namespace TimeSeries
 			return originalsize - TimeSeriesData::size();
 		}
 
-		TimeSeriesData DenseOutput(const T& Start, const T& End, const T& Step, const optionsT& options) const
+		TimeSeriesData DenseOutput(const T& Start, const T& End, const T& Step, const Options& options) const
 		{
 			TimeSeriesData dense;
 			auto start{ TimeSeriesData::end() };
@@ -649,9 +646,9 @@ namespace TimeSeries
 	};
 
 	template<typename T, typename V>
-	class TS : public TimeSeriesData<T, V>
+	class TimeSeries : public TimeSeriesData<T, V>
 	{
-		friend class TimeSeriesTest::TimeSeriesTests;
+		friend class timeseries_test::TimeSeriesTests;
 	public:
 		using TimeSeriesData<T, V>::TimeSeriesData;
 	};
