@@ -12,7 +12,11 @@
 #include "fmt/core.h"
 #include "fmt/format.h"
 
-class TimeSeriesTests;
+namespace TimeSeriesTest
+{
+	class TimeSeriesTests;
+};
+
 
 namespace TimeSeries
 {
@@ -44,7 +48,7 @@ namespace TimeSeries
 	template<typename T, typename V>
 	class Interpolator
 	{
-		using DataT = typename TimeSeriesDataT<T, V>;
+		using DataT = typename TimeSeries::TimeSeriesDataT<T, V>;
 	public:
 		V Get(const DataT& Data, typename DataT::const_iterator& Place, const T& Time) const
 		{
@@ -138,10 +142,10 @@ namespace TimeSeries
 	template<typename T, typename V>
 	class TimeSeriesData : protected TimeSeriesDataT<T, V>
 	{
-		friend class TimeSeriesTests;
+		friend class TimeSeriesTest::TimeSeriesTests;
 		using fwitT = typename TimeSeriesData<T,V>::const_iterator;
-		using pointT = typename PointT<T, V>;
-		using optionsT = typename Options<T, V>;
+		using pointT = typename TimeSeries::PointT<T, V>;
+		using optionsT = typename TimeSeries::Options<T, V>;
 		using NonMonotonicPairT = std::optional<std::pair<const pointT&, const pointT&>>;
 		mutable bool Checked_ = false;
 		void Check() const
@@ -642,5 +646,13 @@ namespace TimeSeries
 			}
 			return dense;
 		}
+	};
+
+	template<typename T, typename V>
+	class TS : public TimeSeriesData<T, V>
+	{
+		friend class TimeSeriesTest::TimeSeriesTests;
+	public:
+		using TimeSeriesData<T, V>::TimeSeriesData;
 	};
 }

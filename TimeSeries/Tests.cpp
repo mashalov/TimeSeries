@@ -1,25 +1,32 @@
 #include "Tests.h"
 
-using TSD = typename TimeSeries::TimeSeriesData<double, double>;
+using namespace TimeSeriesTest;
+
+using TSD = typename TimeSeries::TS<double, double>;
 using TSO = typename TimeSeries::Options<double, double>;
 
-bool TimeSeriesTests::TestConstruct()
+std::filesystem::path TimeSeriesTests::TestPath(const std::filesystem::path& testpath)
+{
+	return std::filesystem::path(TIMESERIES_TEST_PATH) /= testpath;
+}
+
+bool TimeSeriesTest::TimeSeriesTests::TestConstruct()
 {
 	bool ret{ true };
 	TSD EmptySeries;
-	TSD InitListSeries{ {1,2,3,4,5}, {1,2,3,4,5} };
+	TSD InitListSeries{ { 1,2,3,4,5 }, { 1,2,3,4,5 } };
 	const double pt[5] = { 1,2,3,4,5 }, pv[5] = { 1,2,3,4,5 };
 	TSD PtrSeries(5, pt, pv);
-	TSD CSVSeries("tests/test1.csv");
+	TSD CSVSeries(TimeSeriesTests::TestPath("tests/test1.csv"));
 	return ret;
 }
 
-bool TimeSeriesTests::MonotonicTest()
+bool TimeSeriesTest::TimeSeriesTests::MonotonicTest()
 {
 	bool ret{ true };
-	TSD monotonic("tests/monotonic.csv");
+	TSD monotonic(TimeSeriesTests::TestPath("tests/monotonic.csv"));
 	ret &= !monotonic.IsMonotonic().has_value();
-	TSD nonmonotonic("tests/nonmonotonic.csv");
+	TSD nonmonotonic(TimeSeriesTests::TestPath("tests/nonmonotonic.csv"));
 	ret &= nonmonotonic.IsMonotonic().has_value();
 	if (!ret)
 		return ret;
@@ -35,16 +42,16 @@ bool TimeSeriesTests::MonotonicTest()
 	return ret;
 }
 
-bool TimeSeriesTests::GetPointsTest()
+bool TimeSeriesTest::TimeSeriesTests::GetPointsTest()
 {
 	bool ret{ true };
 	TSO options;
 	options.SetTimeTolerance(0.05);
 
-	TSD series("tests/monotonic.csv");
-	auto start{ series.end() };
+	TSD series(TimeSeriesTests::TestPath("tests/monotonic.csv"));
+	TSD::fwitT start{ series.end() };
 
-	for (double t = -1.0; t < 6.0; t += 0.01)
+for (double t = -1.0; t < 6.0; t += 0.01)
 		auto pr{ series.GetTimePoints(t, options, start) };
 
 	TSD onepoint({ 1 }, { 1 });
@@ -65,26 +72,26 @@ bool TimeSeriesTests::GetPointsTest()
 	return ret;
 }
 
-bool TimeSeriesTests::DenseOutputTest()
+bool TimeSeriesTest::TimeSeriesTests::DenseOutputTest()
 {
 	bool ret{ true };
-	TSD series("tests/monotonic.csv");
+	TSD series(TimeSeriesTests::TestPath("tests/monotonic.csv"));
 	TSO options;
 	//options.SetTimeTolerance(0.005);
 	options.SetMultiValuePoint(TimeSeries::MultiValuePointProcess::Avg);
 	auto dense{ series.DenseOutput(-1.0, 6.0, 0.01, options) };
-	dense.WriteCSV("tests/denseoutput.csv");
+	dense.WriteCSV(TimeSeriesTests::TestPath("tests/denseoutput.csv"));
 	dense.Compare(series, options);
 	return ret;
 }
 
 
-bool TimeSeriesTests::CompareTest()
+bool TimeSeriesTest::TimeSeriesTests::CompareTest()
 {
 	bool ret{ true };
 	// Transient data
-	TSD series1{ "tests/compare1.csv" };
-	TSD series2{ "tests/compare2.csv" };
+	TSD series1{ TimeSeriesTests::TestPath("tests/compare1.csv") };
+	TSD series2{ TimeSeriesTests::TestPath("tests/compare2.csv") };
 	TSO options;
 	options.SetMultiValuePoint(TimeSeries::MultiValuePointProcess::Avg);
 	auto cr1{ series1.Compare(series2, options) };
@@ -96,8 +103,8 @@ bool TimeSeriesTests::CompareTest()
 
 	// Kolmogorov-Smirnov test from example
 	// https://www.researchgate.net/post/How_can_I_statistically_compare_two_curves_same_X_values_Different_Y_values_without_using_MATLAB_or_R
-	TSD series3{ "tests/kstest1.csv" };
-	TSD series4{ "tests/kstest2.csv" };
+	TSD series3{ TimeSeriesTests::TestPath("tests/kstest1.csv") };
+	TSD series4{ TimeSeriesTests::TestPath("tests/kstest2.csv") };
 	Test(std::abs(series3.Compare(series4, options).Finish().KSTest() - 0.529978470995037) < 1e-14,
 		"Kolmogorov-Smirnov test");
 
@@ -105,36 +112,36 @@ bool TimeSeriesTests::CompareTest()
 	return ret;
 }
 
-bool TimeSeriesTests::DifferenceTest()
+bool TimeSeriesTest::TimeSeriesTests::DifferenceTest()
 {
 	bool ret{ true };
-	TSD series1{ "tests/compare1.csv" };
-	TSD series2{ "tests/compare2.csv" };
+	TSD series1{ TimeSeriesTests::TestPath("tests/compare1.csv") };
+	TSD series2{ TimeSeriesTests::TestPath("tests/compare2.csv") };
 	TSO options;
 	//options.SetTimeTolerance(1e-6);
 	//options.SetValueTolerance(1e-6);
 	options.SetMultiValuePoint(TimeSeries::MultiValuePointProcess::Avg);
 	auto diff{ series1.Difference(series2, options) };
 	diff.Compress(options);
-	diff.WriteCSV("tests/diff.csv");
+	diff.WriteCSV(TimeSeriesTests::TestPath("tests/diff.csv"));
 	return ret;
 }
 
-bool TimeSeriesTests::CompressTest()
+bool TimeSeriesTest::TimeSeriesTests::CompressTest()
 {
 	bool ret{ true };
-	TSD series("tests/monotonic.csv");
+	TSD series(TimeSeriesTests::TestPath("tests/monotonic.csv"));
 	TSO options;
 	options.SetMultiValuePoint(TimeSeries::MultiValuePointProcess::Avg);
 	series.Compress(options);
-	series.WriteCSV("tests/compressed.csv");
+	series.WriteCSV(TimeSeriesTests::TestPath("tests/compressed.csv"));
 	return ret;
 }
 
-bool TimeSeriesTests::OverallTest()
+bool TimeSeriesTest::TimeSeriesTests::OverallTest()
 {
 	bool ret{ true };
-	TSD series1("tests/monotonic.csv");
+	TSD series1(TimeSeriesTests::TestPath("tests/monotonic.csv"));
 	TSD series1ref({1,3,3,5}, {1,3,4,6});
 	TSO options;
 	series1.Compress(options);
@@ -155,7 +162,7 @@ bool TimeSeriesTests::OverallTest()
 	return ret;
 }
  
-bool TimeSeriesTests::TestAll()
+bool TimeSeriesTest::TimeSeriesTests::TestAll()
 {
 	bool ret{ true };
 	ret &= Test(TestConstruct, "Construct");
@@ -169,13 +176,13 @@ bool TimeSeriesTests::TestAll()
 	return ret;
 }
 
-bool TimeSeriesTests::Test(bool result, std::string_view TestName)
+bool TimeSeriesTest::TimeSeriesTests::Test(bool result, const std::string_view TestName)
 {
 	std::cout << (result ? "Passed" : "Failed !") << " : " << TestName << std::endl;
 	return result;
 }
 
-bool TimeSeriesTests::Test(bool(*fnTest)(), std::string_view TestName)
+bool TimeSeriesTest::TimeSeriesTests::Test(bool(*fnTest)(), const std::string_view TestName)
 {
 	return Test((fnTest)(), TestName);
 }

@@ -7,7 +7,7 @@ int main()
 {
     try
     {
-        TimeSeriesTests::TestAll();
+        TimeSeriesTest::TimeSeriesTests::TestAll();
     }
     catch (const std::runtime_error& ex)
     {
